@@ -1,0 +1,332 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String
+  role         String        // ADMINISTRADOR, GESTOR, MEDICO, ATENDENTE, FARMACEUTICO, PACIENTE
+  name         String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  Patient      Patient[]
+  Doctor       Doctor[]
+  AuditLog     AuditLog[]
+  InventoryMov InventoryMovement[]
+}
+
+model Address {
+  id           String    @id @default(uuid())
+  street       String
+  number       String
+  complement   String?
+  neighborhood String
+  city         String
+  state        String
+  zipCode      String
+  Patient      Patient[]
+  UBS          UBS[]
+}
+
+model Patient {
+  id           String        @id @default(uuid())
+  userId       String?       @unique
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name         String
+  cpf          String        @unique
+  birthDate    DateTime
+  phone        String
+  email        String
+  addressId    String
+  address      Address       @relation(fields: [addressId], references: [id])
+  routingUbsId String?
+  routingUbs   UBS?          @relation("PatientRoutingUbs", fields: [routingUbsId], references: [id])
+  appointments Appointment[]
+  referrals    Referral[]
+}
+
+model UBS {
+  id             String          @id @default(uuid())
+  name           String
+  code           String          @unique
+  addressId      String
+  address        Address         @relation(fields: [addressId], references: [id])
+  phone          String
+  email          String
+  status         String          @default("ACTIVE") // ACTIVE, INACTIVE
+  latitude       Float
+  longitude      Float
+  capacity       Int             @default(50)
+  zones          ServiceZone[]
+  specialties    UbsSpecialty[]
+  doctors        DoctorUbs[]
+  schedules      DoctorSchedule[]
+  appointments   Appointment[]
+  inventories    Inventory[]
+  lots           MedicationLot[]
+  routedPatients Patient[]       @relation("PatientRoutingUbs")
+  originReferrals Referral[]     @relation("ReferralOrigin")
+  destReferrals   Referral[]     @relation("ReferralDestination")
+  movements      InventoryMovement[]
+}
+
+model ServiceZone {
+  id           String @id @default(uuid())
+  ubsId        String
+  ubs          UBS    @relation(fields: [ubsId], references: [id], onDelete: Cascade)
+  neighborhood String
+
+  @@unique([ubsId, neighborhood])
+}
+
+model Specialty {
+  id           String         @id @default(uuid())
+  name         String         @unique
+  description  String?
+  status       String         @default("ACTIVE") // ACTIVE, INACTIVE
+  ubsLinks     UbsSpecialty[]
+  doctors      DoctorSpecialty[]
+  appointments Appointment[]
+  referrals    Referral[]
+}
+
+model UbsSpecialty {
+  id          String    @id @default(uuid())
+  ubsId       String
+  ubs         UBS       @relation(fields: [ubsId], references: [id], onDelete: Cascade)
+  specialtyId String
+  specialty   Specialty @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+
+  @@unique([ubsId, specialtyId])
+}
+
+model Doctor {
+  id           String            @id @default(uuid())
+  userId       String?           @unique
+  user         User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name         String
+  cpf          String            @unique
+  crm          String            @unique
+  status       String            @default("ACTIVE") // ACTIVE, INACTIVE
+  specialties  DoctorSpecialty[]
+  ubsLinks     DoctorUbs[]
+  schedules    DoctorSchedule[]
+  appointments Appointment[]
+  prescriptions Prescription[]
+  examRequests  ExamRequest[]
+  referrals    Referral[]        @relation("ReferralDoctor")
+}
+
+model DoctorSpecialty {
+  id          String    @id @default(uuid())
+  doctorId    String
+  doctor      Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  specialtyId String
+  specialty   Specialty @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, specialtyId])
+}
+
+model DoctorUbs {
+  id       String @id @default(uuid())
+  doctorId String
+  doctor   Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  ubsId    String
+  ubs      UBS    @relation(fields: [ubsId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, ubsId])
+}
+
+model DoctorSchedule {
+  id          String @id @default(uuid())
+  doctorId    String
+  doctor      Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  ubsId       String
+  ubs         UBS    @relation(fields: [ubsId], references: [id], onDelete: Cascade)
+  dayOfWeek   Int    // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  startTime   String // "HH:MM"
+  endTime     String // "HH:MM"
+  intervalMin Int    @default(30)
+}
+
+model Appointment {
+  id            String         @id @default(uuid())
+  patientId     String
+  patient       Patient        @relation(fields: [patientId], references: [id])
+  doctorId      String
+  doctor        Doctor         @relation(fields: [doctorId], references: [id])
+  ubsId         String
+  ubs           UBS            @relation(fields: [ubsId], references: [id])
+  specialtyId   String
+  specialty     Specialty      @relation(fields: [specialtyId], references: [id])
+  dateTime      DateTime
+  status        String         @default("AGENDADA") // AGENDADA, CONFIRMADA, PACIENTE_CHEGOU, EM_ATENDIMENTO, ATENDIDA, CANCELADA, FALTA, ENCAMINHADA
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  medicalRecord MedicalRecord?
+
+  @@unique([doctorId, dateTime]) // Prevent double booking for same doctor at same time
+}
+
+model MedicalRecord {
+  id            String         @id @default(uuid())
+  appointmentId String         @unique
+  appointment   Appointment    @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  evolution     String
+  diagnosis     String
+  conduct       String
+  createdAt     DateTime       @default(now())
+  prescription  Prescription?
+  examRequest   ExamRequest?
+}
+
+model Prescription {
+  id              String             @id @default(uuid())
+  appointmentId   String?
+  medicalRecordId String             @unique
+  medicalRecord   MedicalRecord      @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+  doctorId        String
+  doctor          Doctor             @relation(fields: [doctorId], references: [id])
+  createdAt       DateTime           @default(now())
+  status          String             @default("ACTIVE") // ACTIVE, CANCELLED
+  items           PrescriptionItem[]
+}
+
+model PrescriptionItem {
+  id             String                  @id @default(uuid())
+  prescriptionId String
+  prescription   Prescription            @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicationId   String
+  medication     Medication              @relation(fields: [medicationId], references: [id])
+  dosage         String                  // e.g. "500mg"
+  frequency      String                  // e.g. "De 8 em 8 horas"
+  duration       String                  // e.g. "7 dias"
+  qtyRequested   Int
+  qtyDispensed   Int                     @default(0)
+  reservations   MedicationReservation[]
+}
+
+model ExamRequest {
+  id              String            @id @default(uuid())
+  appointmentId   String?
+  medicalRecordId String            @unique
+  medicalRecord   MedicalRecord     @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+  doctorId        String
+  doctor          Doctor            @relation(fields: [doctorId], references: [id])
+  priority        String            @default("NORMAL") // NORMAL, URGENTE
+  observations    String?
+  createdAt       DateTime          @default(now())
+  items           ExamRequestItem[]
+}
+
+model ExamRequestItem {
+  id            String      @id @default(uuid())
+  examRequestId String
+  examRequest   ExamRequest @relation(fields: [examRequestId], references: [id], onDelete: Cascade)
+  examName      String
+  status        String      @default("SOLICITADO") // SOLICITADO, AGUARDANDO, REALIZADO, CANCELADO
+}
+
+model Medication {
+  id          String             @id @default(uuid())
+  name        String             @unique
+  dosageForm  String             // e.g. "Comprimido", "Xarope"
+  minStock    Int                @default(10)
+  targetStock Int                @default(100)
+  status      String             @default("ACTIVE") // ACTIVE, INACTIVE
+  lots        MedicationLot[]
+  items       PrescriptionItem[]
+  inventories Inventory[]
+  movements   InventoryMovement[]
+}
+
+model MedicationLot {
+  id                String                  @id @default(uuid())
+  ubsId             String
+  ubs               UBS                     @relation(fields: [ubsId], references: [id], onDelete: Cascade)
+  medicationId      String
+  medication        Medication              @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  lotNumber         String
+  quantityPhysical  Int
+  quantityReserved  Int                     @default(0)
+  quantityAvailable Int
+  expirationDate    DateTime
+  manufacturingDate DateTime?
+  supplier          String?
+  reservations      MedicationReservation[]
+  movements         InventoryMovement[]
+
+  @@unique([ubsId, medicationId, lotNumber])
+}
+
+model Inventory {
+  id           String     @id @default(uuid())
+  ubsId        String
+  ubs          UBS        @relation(fields: [ubsId], references: [id], onDelete: Cascade)
+  medicationId String
+  medication   Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  quantity     Int        @default(0) // Aggregated available stock in this UBS
+
+  @@unique([ubsId, medicationId])
+}
+
+model InventoryMovement {
+  id           String         @id @default(uuid())
+  medicationId String
+  medication   Medication     @relation(fields: [medicationId], references: [id])
+  lotId        String?
+  lot          MedicationLot? @relation(fields: [lotId], references: [id])
+  ubsId        String
+  ubs          UBS            @relation(fields: [ubsId], references: [id])
+  quantity     Int            // positive for additions, negative for reductions
+  type         String         // INPUT, OUTPUT, RESERVED, DISPENSED, LOSS, RETURN
+  userId       String
+  user         User           @relation(fields: [userId], references: [id])
+  createdAt    DateTime       @default(now())
+  remarks      String?
+}
+
+model MedicationReservation {
+  id                 String           @id @default(uuid())
+  prescriptionItemId String
+  prescriptionItem   PrescriptionItem @relation(fields: [prescriptionItemId], references: [id], onDelete: Cascade)
+  lotId              String
+  lot                MedicationLot    @relation(fields: [lotId], references: [id])
+  quantity           Int
+  status             String           @default("RESERVED") // RESERVED, DISPENSED, CANCELLED
+  createdAt          DateTime         @default(now())
+}
+
+model Referral {
+  id                String    @id @default(uuid())
+  originUbsId       String
+  originUbs         UBS       @relation("ReferralOrigin", fields: [originUbsId], references: [id])
+  destinationUbsId  String
+  destinationUbs    UBS       @relation("ReferralDestination", fields: [destinationUbsId], references: [id])
+  patientId         String
+  patient           Patient   @relation(fields: [patientId], references: [id])
+  specialtyId       String
+  specialty         Specialty @relation(fields: [specialtyId], references: [id])
+  reason            String
+  requestDoctorId   String
+  doctor            Doctor    @relation("ReferralDoctor", fields: [requestDoctorId], references: [id])
+  createdAt         DateTime  @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String   // LOGIN, CREATE, UPDATE, DELETE, etc.
+  resource   String   // e.g. "Appointment", "Prescription"
+  resourceId String?
+  details    String?  // JSON string
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+}
