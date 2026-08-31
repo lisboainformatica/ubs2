@@ -1,10 +1,10 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards, Req, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Query, Req, ForbiddenException } from '@nestjs/common';
 import { AppointmentsService } from './appointments.service';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
+import { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+import { CreateAppointmentDto } from './dto/create-appointment.dto';
+import { UpdateStatusDto } from './dto/update-status.dto';
 
 @Controller('appointments')
-@UseGuards(RolesGuard)
 export class AppointmentsController {
   constructor(private appointmentsService: AppointmentsService) {}
 
@@ -19,18 +19,15 @@ export class AppointmentsController {
 
   @Get()
   async getAppointments(
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Query('patientId') patientId?: string,
     @Query('doctorId') doctorId?: string,
     @Query('ubsId') ubsId?: string,
     @Query('status') status?: string,
     @Query('date') date?: string
   ) {
-    // Let's implement this check:
     let queryPatientId = patientId;
     if (req.user.role === 'PACIENTE') {
-      // In auth.service, we put patientId in user payload! Yes!
-      // req.user has patientId!
       queryPatientId = req.user.patientId;
     }
 
@@ -49,7 +46,7 @@ export class AppointmentsController {
   }
 
   @Get(':id')
-  async getAppointmentById(@Param('id') id: string, @Req() req: any) {
+  async getAppointmentById(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     const appointment = await this.appointmentsService.findOne(id);
     if (req.user.role === 'PACIENTE' && appointment.patient.userId !== req.user.userId) {
       throw new ForbiddenException('Você não tem permissão para visualizar esta consulta.');
@@ -62,17 +59,9 @@ export class AppointmentsController {
 
   @Post()
   async createAppointment(
-    @Body()
-    body: {
-      patientId: string;
-      doctorId: string;
-      specialtyId: string;
-      ubsId: string;
-      dateTime: string;
-    },
-    @Req() req: any
+    @Body() body: CreateAppointmentDto,
+    @Req() req: AuthenticatedRequest
   ) {
-    // If patient, check that they are booking for themselves
     if (req.user.role === 'PACIENTE') {
       if (body.patientId !== req.user.patientId) {
         throw new ForbiddenException('Você só pode agendar consultas para si mesmo.');
@@ -84,13 +73,11 @@ export class AppointmentsController {
   @Patch(':id/status')
   async updateStatus(
     @Param('id') id: string,
-    @Body('status') status: string,
-    @Req() req: any
+    @Body() body: UpdateStatusDto,
+    @Req() req: AuthenticatedRequest
   ) {
-    // Restrictions:
-    // Patients can only transition to CANCELADA.
     if (req.user.role === 'PACIENTE') {
-      if (status !== 'CANCELADA') {
+      if (body.status !== 'CANCELADA') {
         throw new ForbiddenException('Pacientes só podem cancelar suas próprias consultas.');
       }
       const appointment = await this.appointmentsService.findOne(id);
@@ -99,6 +86,6 @@ export class AppointmentsController {
       }
     }
 
-    return this.appointmentsService.updateStatus(id, status, req.user.userId);
+    return this.appointmentsService.updateStatus(id, body.status, req.user.userId);
   }
 }

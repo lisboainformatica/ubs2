@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class AuditService {
@@ -11,22 +12,20 @@ export class AuditService {
     resource: string,
     resourceId: string | null,
     details: any,
-    ipAddress?: string
+    ipAddress?: string,
+    tx?: Prisma.TransactionClient
   ) {
-    try {
-      const detailsStr = details ? JSON.stringify(details) : null;
-      await this.prisma.auditLog.create({
-        data: {
-          userId,
-          action,
-          resource,
-          resourceId,
-          details: detailsStr,
-          ipAddress: ipAddress || '127.0.0.1',
-        },
-      });
-    } catch (error) {
-      console.error('Falha ao gravar log de auditoria:', error);
-    }
+    const detailsStr = details ? JSON.stringify(details) : null;
+    const client = tx || this.prisma;
+    await client.auditLog.create({
+      data: {
+        userId,
+        action,
+        resource,
+        resourceId,
+        details: detailsStr,
+        ipAddress: ipAddress || null,
+      },
+    });
   }
 }

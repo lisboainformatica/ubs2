@@ -1,6 +1,7 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../shared/prisma.service';
 import { AuditService } from '../../shared/audit.service';
+import { AppointmentStatus } from '@prisma/client';
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   AGENDADA: ['CONFIRMADA', 'CANCELADA', 'FALTA'],
@@ -120,52 +121,92 @@ export class AppointmentsService {
     });
     if (!specialty) throw new NotFoundException('Especialidade não encontrada.');
 
+    // Verify Doctor-UBS link
+    const doctorUbsLink = await this.prisma.doctorUbs.findFirst({
+      where: {
+        doctorId: data.doctorId,
+        ubsId: data.ubsId,
+      },
+    });
+    if (!doctorUbsLink) {
+      throw new BadRequestException('O médico não atende na UBS selecionada.');
+    }
+
+    // Verify Doctor-Specialty link
+    const doctorSpecialtyLink = await this.prisma.doctorSpecialty.findFirst({
+      where: {
+        doctorId: data.doctorId,
+        specialtyId: data.specialtyId,
+      },
+    });
+    if (!doctorSpecialtyLink) {
+      throw new BadRequestException('O médico não possui a especialidade selecionada.');
+    }
+
+    // Verify UBS-Specialty link
+    const ubsSpecialtyLink = await this.prisma.ubsSpecialty.findFirst({
+      where: {
+        ubsId: data.ubsId,
+        specialtyId: data.specialtyId,
+      },
+    });
+    if (!ubsSpecialtyLink) {
+      throw new BadRequestException('A UBS selecionada não oferece esta especialidade.');
+    }
+
     // Concurrency Lock & Transaction
-    return await this.prisma.$transaction(async (tx) => {
-      // 1. Check if the doctor already has an appointment booked at this exact time
-      const existing = await tx.appointment.findFirst({
-        where: {
-          doctorId: data.doctorId,
-          dateTime: bookingTime,
-          status: { notIn: ['CANCELADA'] },
-        },
-      });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // 1. Check if the doctor already has an appointment booked at this exact time
+        const existing = await tx.appointment.findFirst({
+          where: {
+            doctorId: data.doctorId,
+            dateTime: bookingTime,
+            status: { notIn: ['CANCELADA'] },
+          },
+        });
 
-      if (existing) {
-        throw new BadRequestException('Este horário já foi reservado por outro paciente.');
-      }
+        if (existing) {
+          throw new ConflictException('Este horário já foi reservado por outro paciente.');
+        }
 
-      // 2. Create Appointment
-      const appointment = await tx.appointment.create({
-        data: {
-          patientId: data.patientId,
-          doctorId: data.doctorId,
-          specialtyId: data.specialtyId,
-          ubsId: data.ubsId,
-          dateTime: bookingTime,
-          status: 'AGENDADA',
-        },
-      });
+        // 2. Create Appointment
+        const appointment = await tx.appointment.create({
+          data: {
+            patientId: data.patientId,
+            doctorId: data.doctorId,
+            specialtyId: data.specialtyId,
+            ubsId: data.ubsId,
+            dateTime: bookingTime,
+            status: 'AGENDADA',
+          },
+        });
 
-      await tx.auditLog.create({
-        data: {
+        await this.audit.log(
           userId,
-          action: 'APPOINTMENT_CREATED',
-          resource: 'Appointment',
-          resourceId: appointment.id,
-          details: JSON.stringify({
+          'APPOINTMENT_CREATED',
+          'Appointment',
+          appointment.id,
+          {
             patientId: data.patientId,
             doctorId: data.doctorId,
             dateTime: data.dateTime,
-          }),
-        },
-      });
+          },
+          undefined,
+          tx
+        );
 
-      return appointment;
-    });
+        return appointment;
+      });
+    } catch (err: any) {
+      if (err.code === 'P2002') {
+        throw new ConflictException('Este horário já foi reservado por outro paciente.');
+      }
+      throw err;
+    }
   }
 
-  async updateStatus(id: string, newStatus: string, userId: string) {
+  async updateStatus(id: string, newStatus: AppointmentStatus, userId: string) {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id },
     });

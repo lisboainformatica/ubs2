@@ -90,6 +90,16 @@ export class DoctorsService {
     const ubs = await this.prisma.uBS.findUnique({ where: { id: ubsId } });
     if (!ubs) throw new NotFoundException('UBS não encontrada.');
 
+    // Validate schedule hours and intervals
+    for (const s of schedules) {
+      if (s.startTime >= s.endTime) {
+        throw new BadRequestException(`Horário inválido: o horário de início (${s.startTime}) deve ser menor que o horário de término (${s.endTime}).`);
+      }
+      if (s.intervalMin !== undefined && s.intervalMin <= 0) {
+        throw new BadRequestException('O intervalo da consulta deve ser maior que 0 minutos.');
+      }
+    }
+
     // Remove existing schedules for this doctor at this UBS to overwrite
     await this.prisma.$transaction(async (tx) => {
       await tx.doctorSchedule.deleteMany({

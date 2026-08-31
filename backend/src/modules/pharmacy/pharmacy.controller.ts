@@ -1,16 +1,19 @@
-import { Controller, Get, Post, Body, Query, UseGuards, Req, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Req, Param } from '@nestjs/common';
 import { PharmacyService } from './pharmacy.service';
-import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+import { CreateMedicationDto } from './dto/create-medication.dto';
+import { AddLotDto } from './dto/add-lot.dto';
+import { DispenseMedicationDto } from './dto/dispense-medication.dto';
+import { AdjustInventoryDto } from './dto/adjust-inventory.dto';
 
 @Controller('inventory')
-@UseGuards(RolesGuard)
 export class PharmacyController {
   constructor(private pharmacyService: PharmacyService) {}
 
   @Post('medications')
   @Roles('ADMINISTRADOR')
-  async createMedication(@Body() body: { name: string; dosageForm: string; minStock?: number; targetStock?: number }) {
+  async createMedication(@Body() body: CreateMedicationDto) {
     return this.pharmacyService.createMedication(body);
   }
 
@@ -22,25 +25,19 @@ export class PharmacyController {
   @Post('lots')
   @Roles('ADMINISTRADOR', 'FARMACEUTICO')
   async addLot(
-    @Body()
-    body: {
-      medicationId: string;
-      lotNumber: string;
-      quantityPhysical: number;
-      expirationDate: string;
-      manufacturingDate?: string;
-      supplier?: string;
-      ubsId: string;
-    },
-    @Req() req: any
+    @Body() body: AddLotDto,
+    @Req() req: AuthenticatedRequest
   ) {
     return this.pharmacyService.addLot(body, req.user.userId);
   }
 
   @Post('dispense')
   @Roles('FARMACEUTICO', 'ATENDENTE')
-  async dispenseMedication(@Body('prescriptionItemId') prescriptionItemId: string, @Req() req: any) {
-    return this.pharmacyService.dispenseMedication(prescriptionItemId, req.user.userId);
+  async dispenseMedication(
+    @Body() body: DispenseMedicationDto,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.pharmacyService.dispenseMedication(body.prescriptionItemId, req.user.userId);
   }
 
   @Get('alerts')
@@ -68,16 +65,8 @@ export class PharmacyController {
   @Post('adjust')
   @Roles('ADMINISTRADOR', 'FARMACEUTICO')
   async adjustInventory(
-    @Body()
-    body: {
-      medicationId: string;
-      lotId: string;
-      ubsId: string;
-      quantity: number;
-      type: 'LOSS' | 'RETURN';
-      remarks?: string;
-    },
-    @Req() req: any
+    @Body() body: AdjustInventoryDto,
+    @Req() req: AuthenticatedRequest
   ) {
     return this.pharmacyService.registerLossOrReturn(body, req.user.userId);
   }

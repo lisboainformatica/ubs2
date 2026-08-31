@@ -1,13 +1,21 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
+  // Validate required JWT_SECRET at startup (Etapa 2)
+  if (!process.env.JWT_SECRET) {
+    console.error('FATAL: A variável de ambiente JWT_SECRET não está definida.');
+    process.exit(1);
+  }
+
   const app = await NestFactory.create(AppModule);
 
-  // Enable CORS for local frontend integration
+  // Enable CORS based on environment (Etapa 21)
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   app.enableCors({
-    origin: '*',
+    origin: frontendUrl,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });

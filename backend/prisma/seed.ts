@@ -190,7 +190,7 @@ async function main() {
     data: {
       userId: doctorUser.id,
       name: 'Dr. Carlos Silva',
-      cpf: '111.111.111-11',
+      cpf: '11111111111',
       crm: '123456-SP',
       status: 'ACTIVE',
     },
@@ -243,7 +243,7 @@ async function main() {
     data: {
       userId: patientUser.id,
       name: 'João Costa',
-      cpf: '222.222.222-22',
+      cpf: '22222222222',
       birthDate: new Date('1990-05-15'),
       phone: '(11) 99999-8888',
       email: 'paciente@ubs.com',

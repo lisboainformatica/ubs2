@@ -1,39 +1,18 @@
-import { Controller, Get, Post, Param, Body, Query, UseGuards, Req, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query, Req, ForbiddenException } from '@nestjs/common';
 import { MedicalRecordsService } from './medical-records.service';
-import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+import { CreateAttendanceDto } from './dto/create-attendance.dto';
 
 @Controller('medical-records')
-@UseGuards(RolesGuard)
 export class MedicalRecordsController {
   constructor(private medicalRecordsService: MedicalRecordsService) {}
 
   @Post('attendances')
   @Roles('MEDICO')
   async createAttendance(
-    @Body()
-    body: {
-      appointmentId: string;
-      evolution: string;
-      diagnosis: string;
-      conduct: string;
-      prescriptions?: {
-        medicationId: string;
-        dosage: string;
-        frequency: string;
-        duration: string;
-        qtyRequested: number;
-      }[];
-      examRequests?: {
-        examName: string;
-      }[];
-      referral?: {
-        destinationUbsId: string;
-        specialtyId: string;
-        reason: string;
-      };
-    },
-    @Req() req: any
+    @Body() body: CreateAttendanceDto,
+    @Req() req: AuthenticatedRequest
   ) {
     return this.medicalRecordsService.createAttendance(body, req.user.userId);
   }
@@ -41,7 +20,7 @@ export class MedicalRecordsController {
   @Get('attendances/appointment/:appointmentId')
   async getAttendanceByAppointment(
     @Param('appointmentId') appointmentId: string,
-    @Req() req: any
+    @Req() req: AuthenticatedRequest
   ) {
     const record = await this.medicalRecordsService.getAttendanceByAppointment(appointmentId);
 
@@ -52,7 +31,7 @@ export class MedicalRecordsController {
   }
 
   @Get('history/:patientId')
-  async getHistory(@Param('patientId') patientId: string, @Req() req: any) {
+  async getHistory(@Param('patientId') patientId: string, @Req() req: AuthenticatedRequest) {
     if (req.user.role === 'PACIENTE' && req.user.patientId !== patientId) {
       throw new ForbiddenException('Você só pode visualizar seu próprio histórico médico.');
     }
@@ -61,7 +40,7 @@ export class MedicalRecordsController {
 
   @Get('referrals')
   async getReferrals(
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Query('patientId') patientId?: string,
     @Query('originUbsId') originUbsId?: string,
     @Query('destinationUbsId') destinationUbsId?: string

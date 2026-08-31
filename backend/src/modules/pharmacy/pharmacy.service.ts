@@ -130,15 +130,7 @@ export class PharmacyService {
         },
       });
 
-      await tx.auditLog.create({
-        data: {
-          userId,
-          action: 'INVENTORY_ADJUSTED',
-          resource: 'MedicationLot',
-          resourceId: lot.id,
-          details: JSON.stringify({ medicationId: data.medicationId, ubsId: data.ubsId, quantity: data.quantityPhysical }),
-        },
-      });
+      await this.audit.log(userId, 'INVENTORY_ADJUSTED', 'MedicationLot', lot.id, { medicationId: data.medicationId, ubsId: data.ubsId, quantity: data.quantityPhysical }, undefined, tx);
 
       return lot;
     });
@@ -178,6 +170,20 @@ export class PharmacyService {
           throw new BadRequestException(
             `Não é possível dispensar: O lote ${res.lot.lotNumber} está vencido (Validade: ${res.lot.expirationDate.toLocaleDateString()}).`
           );
+        }
+
+        // Check stock invariants
+        const lot = await tx.medicationLot.findUnique({
+          where: { id: res.lotId },
+        });
+        if (!lot) {
+          throw new NotFoundException(`Lote ${res.lotId} não encontrado.`);
+        }
+        if (lot.quantityPhysical < res.quantity) {
+          throw new BadRequestException(`Estoque físico insuficiente no lote ${lot.lotNumber} para dispensação.`);
+        }
+        if (lot.quantityReserved < res.quantity) {
+          throw new BadRequestException(`Estoque reservado insuficiente no lote ${lot.lotNumber} para dispensação.`);
         }
 
         // Physical and Reservation release
@@ -239,15 +245,7 @@ export class PharmacyService {
         update: { quantity: currentStock },
       });
 
-      await tx.auditLog.create({
-        data: {
-          userId,
-          action: 'MEDICATION_DISPENSED',
-          resource: 'PrescriptionItem',
-          resourceId: prescriptionItemId,
-          details: JSON.stringify({ qty: totalDispensed, ubsId }),
-        },
-      });
+      await this.audit.log(userId, 'MEDICATION_DISPENSED', 'PrescriptionItem', prescriptionItemId, { qty: totalDispensed, ubsId }, undefined, tx);
 
       return { success: true, quantityDispensed: totalDispensed };
     });
@@ -357,6 +355,20 @@ export class PharmacyService {
     }
 
     return await this.prisma.$transaction(async (tx) => {
+      const currentLot = await tx.medicationLot.findUnique({
+        where: { id: data.lotId },
+      });
+      if (!currentLot) {
+        throw new NotFoundException('Lote não encontrado.');
+      }
+
+      if (currentLot.quantityPhysical + data.quantity < 0) {
+        throw new BadRequestException('A quantidade física do lote não pode se tornar negativa.');
+      }
+      if (currentLot.quantityAvailable + data.quantity < 0) {
+        throw new BadRequestException('A quantidade disponível do lote não pode se tornar negativa.');
+      }
+
       // Update lot stock
       const lot = await tx.medicationLot.update({
         where: { id: data.lotId },
@@ -398,15 +410,7 @@ export class PharmacyService {
         update: { quantity: currentStock },
       });
 
-      await tx.auditLog.create({
-        data: {
-          userId,
-          action: 'INVENTORY_ADJUSTED',
-          resource: 'MedicationLot',
-          resourceId: lot.id,
-          details: JSON.stringify({ type: data.type, quantity: data.quantity }),
-        },
-      });
+      await this.audit.log(userId, 'INVENTORY_ADJUSTED', 'MedicationLot', lot.id, { type: data.type, quantity: data.quantity }, undefined, tx);
 
       return lot;
     });

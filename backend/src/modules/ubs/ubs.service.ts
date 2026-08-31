@@ -81,15 +81,7 @@ export class UbsService {
         });
       }
 
-      await tx.auditLog.create({
-        data: {
-          userId,
-          action: 'CREATE',
-          resource: 'UBS',
-          resourceId: ubs.id,
-          details: JSON.stringify({ name: ubs.name, code: ubs.code }),
-        },
-      });
+      await this.audit.log(userId, 'CREATE', 'UBS', ubs.id, { name: ubs.name, code: ubs.code }, undefined, tx);
 
       return ubs;
     });

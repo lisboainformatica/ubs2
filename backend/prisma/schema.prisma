@@ -1,10 +1,59 @@
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
   provider = "prisma-client-js"
+}
+
+enum UbsStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SpecialtyStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum DoctorStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AppointmentStatus {
+  AGENDADA
+  CONFIRMADA
+  PACIENTE_CHEGOU
+  EM_ATENDIMENTO
+  ATENDIDA
+  CANCELADA
+  FALTA
+  ENCAMINHADA
+}
+
+enum PrescriptionStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum ExamStatus {
+  SOLICITADO
+  AGUARDANDO
+  REALIZADO
+  CANCELADO
+}
+
+enum MedicationStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ReservationStatus {
+  RESERVED
+  DISPENSED
+  CANCELLED
 }
 
 model User {
@@ -59,7 +108,7 @@ model UBS {
   address        Address         @relation(fields: [addressId], references: [id])
   phone          String
   email          String
-  status         String          @default("ACTIVE") // ACTIVE, INACTIVE
+  status         UbsStatus       @default(ACTIVE)
   latitude       Float
   longitude      Float
   capacity       Int             @default(50)
@@ -89,7 +138,7 @@ model Specialty {
   id           String         @id @default(uuid())
   name         String         @unique
   description  String?
-  status       String         @default("ACTIVE") // ACTIVE, INACTIVE
+  status       SpecialtyStatus @default(ACTIVE)
   ubsLinks     UbsSpecialty[]
   doctors      DoctorSpecialty[]
   appointments Appointment[]
@@ -113,7 +162,7 @@ model Doctor {
   name         String
   cpf          String            @unique
   crm          String            @unique
-  status       String            @default("ACTIVE") // ACTIVE, INACTIVE
+  status       DoctorStatus      @default(ACTIVE)
   specialties  DoctorSpecialty[]
   ubsLinks     DoctorUbs[]
   schedules    DoctorSchedule[]
@@ -166,7 +215,7 @@ model Appointment {
   specialtyId   String
   specialty     Specialty      @relation(fields: [specialtyId], references: [id])
   dateTime      DateTime
-  status        String         @default("AGENDADA") // AGENDADA, CONFIRMADA, PACIENTE_CHEGOU, EM_ATENDIMENTO, ATENDIDA, CANCELADA, FALTA, ENCAMINHADA
+  status        AppointmentStatus @default(AGENDADA)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   medicalRecord MedicalRecord?
@@ -194,7 +243,7 @@ model Prescription {
   doctorId        String
   doctor          Doctor             @relation(fields: [doctorId], references: [id])
   createdAt       DateTime           @default(now())
-  status          String             @default("ACTIVE") // ACTIVE, CANCELLED
+  status          PrescriptionStatus @default(ACTIVE)
   items           PrescriptionItem[]
 }
 
@@ -230,7 +279,7 @@ model ExamRequestItem {
   examRequestId String
   examRequest   ExamRequest @relation(fields: [examRequestId], references: [id], onDelete: Cascade)
   examName      String
-  status        String      @default("SOLICITADO") // SOLICITADO, AGUARDANDO, REALIZADO, CANCELADO
+  status        ExamStatus  @default(SOLICITADO)
 }
 
 model Medication {
@@ -239,7 +288,7 @@ model Medication {
   dosageForm  String             // e.g. "Comprimido", "Xarope"
   minStock    Int                @default(10)
   targetStock Int                @default(100)
-  status      String             @default("ACTIVE") // ACTIVE, INACTIVE
+  status      MedicationStatus   @default(ACTIVE)
   lots        MedicationLot[]
   items       PrescriptionItem[]
   inventories Inventory[]
@@ -299,7 +348,7 @@ model MedicationReservation {
   lotId              String
   lot                MedicationLot    @relation(fields: [lotId], references: [id])
   quantity           Int
-  status             String           @default("RESERVED") // RESERVED, DISPENSED, CANCELLED
+  status             ReservationStatus @default(RESERVED)
   createdAt          DateTime         @default(now())
 }
 

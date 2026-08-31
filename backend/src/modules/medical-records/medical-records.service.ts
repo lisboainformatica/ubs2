@@ -36,12 +36,22 @@ export class MedicalRecordsService {
     });
     if (!doctor) throw new NotFoundException('Médico não credenciado.');
 
-    // 2. Verify appointment exists and is in status EM_ATENDIMENTO
+    // 2. Verify appointment exists
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: data.appointmentId },
       include: { patient: true },
     });
     if (!appointment) throw new NotFoundException('Consulta não encontrada.');
+
+    // Ensure the executing doctor matches the appointment's assigned doctor
+    if (appointment.doctorId !== doctor.id) {
+      throw new BadRequestException('Você não é o médico responsável por esta consulta.');
+    }
+
+    // Ensure the appointment status is valid for registering attendance
+    if (['CANCELADA', 'ATENDIDA', 'ENCAMINHADA', 'FALTA'].includes(appointment.status)) {
+      throw new BadRequestException(`Não é possível registrar atendimento para uma consulta com status ${appointment.status}.`);
+    }
 
     return await this.prisma.$transaction(async (tx) => {
       // Create Medical Record
@@ -190,6 +200,47 @@ export class MedicalRecordsService {
 
       // Handle Referrals if any
       if (data.referral) {
+        // 1. Verify destination UBS exists and is active
+        const destUbs = await tx.uBS.findUnique({
+          where: { id: data.referral.destinationUbsId },
+        });
+        if (!destUbs) {
+          throw new NotFoundException('UBS de destino não encontrada.');
+        }
+        if (destUbs.status !== 'ACTIVE') {
+          throw new BadRequestException('A UBS de destino está inativa.');
+        }
+
+        // 2. Verify specialty exists
+        const spec = await tx.specialty.findUnique({
+          where: { id: data.referral.specialtyId },
+        });
+        if (!spec) {
+          throw new NotFoundException('Especialidade de encaminhamento não encontrada.');
+        }
+
+        // 3. Verify destination UBS offers the specialty
+        const ubsSpec = await tx.ubsSpecialty.findFirst({
+          where: {
+            ubsId: data.referral.destinationUbsId,
+            specialtyId: data.referral.specialtyId,
+          },
+        });
+        if (!ubsSpec) {
+          throw new BadRequestException('A UBS de destino não oferece a especialidade solicitada.');
+        }
+
+        // 4. Verify patient is eligible (does not have a referral for the same specialty)
+        const pendingReferral = await tx.referral.findFirst({
+          where: {
+            patientId: appointment.patientId,
+            specialtyId: data.referral.specialtyId,
+          },
+        });
+        if (pendingReferral) {
+          throw new BadRequestException('O paciente já possui um encaminhamento para esta especialidade.');
+        }
+
         await tx.referral.create({
           data: {
             originUbsId: appointment.ubsId,
@@ -214,15 +265,7 @@ export class MedicalRecordsService {
         });
       }
 
-      await tx.auditLog.create({
-        data: {
-          userId: doctor.userId,
-          action: 'PRESCRIPTION_CREATED',
-          resource: 'MedicalRecord',
-          resourceId: medicalRecord.id,
-          details: JSON.stringify({ appointmentId: data.appointmentId }),
-        },
-      });
+      await this.audit.log(doctor.userId, 'PRESCRIPTION_CREATED', 'MedicalRecord', medicalRecord.id, { appointmentId: data.appointmentId }, undefined, tx);
 
       return medicalRecord;
     });

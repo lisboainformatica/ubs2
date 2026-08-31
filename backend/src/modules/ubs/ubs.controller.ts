@@ -1,10 +1,13 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Req } from '@nestjs/common';
 import { UbsService } from './ubs.service';
-import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+import { CreateUbsDto } from './dto/create-ubs.dto';
+import { UpdateUbsDto } from './dto/update-ubs.dto';
+import { AddZoneDto } from './dto/add-zone.dto';
+import { CreateSpecialtyDto } from './dto/create-specialty.dto';
 
 @Controller()
-@UseGuards(RolesGuard)
 export class UbsController {
   constructor(private ubsService: UbsService) {}
 
@@ -21,28 +24,8 @@ export class UbsController {
   @Post('ubs')
   @Roles('ADMINISTRADOR')
   async createUbs(
-    @Body()
-    body: {
-      name: string;
-      code: string;
-      phone: string;
-      email: string;
-      latitude: number;
-      longitude: number;
-      capacity?: number;
-      address: {
-        street: string;
-        number: string;
-        complement?: string;
-        neighborhood: string;
-        city: string;
-        state: string;
-        zipCode: string;
-      };
-      specialtyIds?: string[];
-      zones?: string[];
-    },
-    @Req() req: any
+    @Body() body: CreateUbsDto,
+    @Req() req: AuthenticatedRequest
   ) {
     return this.ubsService.createUbs(body, req.user.userId);
   }
@@ -51,17 +34,8 @@ export class UbsController {
   @Roles('ADMINISTRADOR')
   async updateUbs(
     @Param('id') id: string,
-    @Body()
-    body: {
-      name?: string;
-      phone?: string;
-      email?: string;
-      status?: 'ACTIVE' | 'INACTIVE';
-      capacity?: number;
-      latitude?: number;
-      longitude?: number;
-    },
-    @Req() req: any
+    @Body() body: UpdateUbsDto,
+    @Req() req: AuthenticatedRequest
   ) {
     return this.ubsService.updateUbs(id, body, req.user.userId);
   }
@@ -70,15 +44,15 @@ export class UbsController {
   @Roles('ADMINISTRADOR')
   async addZone(
     @Param('id') id: string,
-    @Body('neighborhood') neighborhood: string,
-    @Req() req: any
+    @Body() body: AddZoneDto,
+    @Req() req: AuthenticatedRequest
   ) {
-    return this.ubsService.addZone(id, neighborhood, req.user.userId);
+    return this.ubsService.addZone(id, body.neighborhood, req.user.userId);
   }
 
   @Delete('ubs/zones/:id')
   @Roles('ADMINISTRADOR')
-  async removeZone(@Param('id') id: string, @Req() req: any) {
+  async removeZone(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.ubsService.removeZone(id, req.user.userId);
   }
 
@@ -90,8 +64,8 @@ export class UbsController {
   @Post('specialties')
   @Roles('ADMINISTRADOR')
   async createSpecialty(
-    @Body() body: { name: string; description?: string },
-    @Req() req: any
+    @Body() body: CreateSpecialtyDto,
+    @Req() req: AuthenticatedRequest
   ) {
     return this.ubsService.createSpecialty(body, req.user.userId);
   }
@@ -101,7 +75,7 @@ export class UbsController {
   async linkSpecialty(
     @Param('id') ubsId: string,
     @Body('specialtyId') specialtyId: string,
-    @Req() req: any
+    @Req() req: AuthenticatedRequest
   ) {
     return this.ubsService.linkSpecialty(ubsId, specialtyId, req.user.userId);
   }
@@ -111,7 +85,7 @@ export class UbsController {
   async unlinkSpecialty(
     @Param('id') ubsId: string,
     @Param('specialtyId') specialtyId: string,
-    @Req() req: any
+    @Req() req: AuthenticatedRequest
   ) {
     return this.ubsService.unlinkSpecialty(ubsId, specialtyId, req.user.userId);
   }

@@ -1,10 +1,10 @@
-import { Controller, Get, Post, Param, Body, Query, UseGuards, Req, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query, Req, ForbiddenException } from '@nestjs/common';
 import { DoctorsService } from './doctors.service';
-import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+import { SaveDoctorScheduleDto } from './dto/save-doctor-schedule.dto';
 
 @Controller('doctors')
-@UseGuards(RolesGuard)
 export class DoctorsController {
   constructor(private doctorsService: DoctorsService) {}
 
@@ -27,17 +27,9 @@ export class DoctorsController {
   @Roles('ADMINISTRADOR', 'MEDICO')
   async saveDoctorSchedule(
     @Param('id') doctorId: string,
-    @Body('ubsId') ubsId: string,
-    @Body('schedules')
-    schedules: {
-      dayOfWeek: number;
-      startTime: string;
-      endTime: string;
-      intervalMin?: number;
-    }[],
-    @Req() req: any
+    @Body() body: SaveDoctorScheduleDto,
+    @Req() req: AuthenticatedRequest
   ) {
-    // If current user is a doctor, they can only edit their own schedule
     if (req.user.role === 'MEDICO') {
       const doctor = await this.doctorsService.findOne(doctorId);
       if (doctor.userId !== req.user.userId) {
@@ -45,6 +37,7 @@ export class DoctorsController {
       }
     }
 
-    return this.doctorsService.createSchedule(doctorId, ubsId, schedules, req.user.userId);
+    return this.doctorsService.createSchedule(doctorId, body.ubsId, body.schedules, req.user.userId);
   }
 }
+

@@ -3,6 +3,8 @@ import { PrismaService } from '../../shared/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { AuditService } from '../../shared/audit.service';
+import { JwtPayload } from './interfaces/authenticated-request.interface';
+import { normalizeCpf, validateCpf } from '../../shared/utils/cpf.util';
 
 @Injectable()
 export class AuthService {
@@ -12,7 +14,7 @@ export class AuthService {
     private audit: AuditService
   ) {}
 
-  async login(email: string, passwordHash: string, ipAddress?: string) {
+  async login(email: string, password: string, ipAddress?: string) {
     const user = await this.prisma.user.findUnique({
       where: { email },
     });
@@ -21,14 +23,19 @@ export class AuthService {
       throw new UnauthorizedException('E-mail ou senha incorretos.');
     }
 
-    const isPasswordValid = await bcrypt.compare(passwordHash, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('E-mail ou senha incorretos.');
     }
 
-    const payload = { userId: user.id, email: user.email, role: user.role, name: user.name };
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      throw new Error('JWT_SECRET não configurado no ambiente.');
+    }
+
+    const payload: JwtPayload = { userId: user.id, email: user.email, role: user.role, name: user.name };
     const token = await this.jwtService.signAsync(payload, {
-      secret: process.env.JWT_SECRET || 'ubs_super_secret_key_2026',
+      secret,
       expiresIn: '24h',
     });
 
@@ -50,7 +57,7 @@ export class AuthService {
       doctorId = doctor ? doctor.id : null;
     }
 
-    await this.audit.log(user.id, 'LOGIN', 'User', user.id, { email: user.email }, ipAddress);
+    await this.audit.log(user.id, 'LOGIN', 'User', user.id, { email: user.email }, ipAddress ?? null);
 
     return {
       access_token: token,
@@ -67,7 +74,8 @@ export class AuthService {
 
   async registerPatient(data: {
     email: string;
-    passwordHash: string;
+    password?: string;
+    passwordHash?: string; // fallback mapping if frontend still sends it before Phase 6
     name: string;
     cpf: string;
     birthDate: string;
@@ -82,6 +90,17 @@ export class AuthService {
       zipCode: string;
     };
   }, ipAddress?: string) {
+    const plainPassword = data.password || data.passwordHash;
+    if (!plainPassword) {
+      throw new BadRequestException('A senha é obrigatória.');
+    }
+
+    // Normalize and validate CPF
+    const normalizedCpf = normalizeCpf(data.cpf);
+    if (!validateCpf(normalizedCpf)) {
+      throw new BadRequestException('CPF inválido.');
+    }
+
     // Check if email already exists
     const existingUser = await this.prisma.user.findUnique({
       where: { email: data.email },
@@ -92,13 +111,13 @@ export class AuthService {
 
     // Check if CPF already exists
     const existingPatient = await this.prisma.patient.findUnique({
-      where: { cpf: data.cpf },
+      where: { cpf: normalizedCpf },
     });
     if (existingPatient) {
       throw new BadRequestException('CPF já cadastrado.');
     }
 
-    const hashedPassword = await bcrypt.hash(data.passwordHash, 10);
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
     return await this.prisma.$transaction(async (tx) => {
       // 1. Create User
@@ -125,7 +144,6 @@ export class AuthService {
       });
 
       // 3. Determine UBS of Reference by Neighborhood (Zone mapping)
-      // Check if there is any UBS that serves this neighborhood
       const matchedZone = await tx.serviceZone.findFirst({
         where: {
           neighborhood: {
@@ -134,12 +152,10 @@ export class AuthService {
         },
       });
 
-      // Let's also check if there is a backup UBS (first active one) if no zone matches
       let routingUbsId: string | null = null;
       if (matchedZone) {
         routingUbsId = matchedZone.ubsId;
       } else {
-        // Fallback: Use the first active UBS in database as default reference
         const defaultUbs = await tx.uBS.findFirst({
           where: { status: 'ACTIVE' },
         });
@@ -153,7 +169,7 @@ export class AuthService {
         data: {
           userId: user.id,
           name: data.name,
-          cpf: data.cpf,
+          cpf: normalizedCpf,
           birthDate: new Date(data.birthDate),
           phone: data.phone,
           email: data.email,
@@ -162,16 +178,16 @@ export class AuthService {
         },
       });
 
-      await this.prisma.auditLog.create({
-        data: {
-          userId: user.id,
-          action: 'CREATE',
-          resource: 'Patient',
-          resourceId: patient.id,
-          details: JSON.stringify({ email: user.email, routingUbsId }),
-          ipAddress: ipAddress || '127.0.0.1',
-        },
-      });
+
+      await this.audit.log(
+        user.id,
+        'CREATE',
+        'Patient',
+        patient.id,
+        { email: user.email, routingUbsId },
+        ipAddress ?? undefined,
+        tx
+      );
 
       return {
         id: patient.id,
@@ -184,7 +200,8 @@ export class AuthService {
 
   async createInternalUser(data: {
     email: string;
-    passwordHash: string;
+    password?: string;
+    passwordHash?: string; // fallback mapping
     name: string;
     role: string;
     doctorDetails?: {
@@ -194,6 +211,11 @@ export class AuthService {
       ubsIds: string[];
     };
   }, adminUserId: string, ipAddress?: string) {
+    const plainPassword = data.password || data.passwordHash;
+    if (!plainPassword) {
+      throw new BadRequestException('A senha é obrigatória.');
+    }
+
     const allowedRoles = ['ADMINISTRADOR', 'GESTOR', 'MEDICO', 'ATENDENTE', 'FARMACEUTICO'];
     if (!allowedRoles.includes(data.role)) {
       throw new BadRequestException('Role inválida.');
@@ -206,7 +228,7 @@ export class AuthService {
       throw new BadRequestException('E-mail já cadastrado.');
     }
 
-    const hashedPassword = await bcrypt.hash(data.passwordHash, 10);
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
     return await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -223,8 +245,14 @@ export class AuthService {
           throw new BadRequestException('Detalhes do médico são obrigatórios.');
         }
 
+        // Normalize and validate doctor CPF
+        const normalizedCpf = normalizeCpf(data.doctorDetails.cpf);
+        if (!validateCpf(normalizedCpf)) {
+          throw new BadRequestException('CPF de médico inválido.');
+        }
+
         // Check if CPF or CRM already exists
-        const existingCpf = await tx.doctor.findUnique({ where: { cpf: data.doctorDetails.cpf } });
+        const existingCpf = await tx.doctor.findUnique({ where: { cpf: normalizedCpf } });
         if (existingCpf) throw new BadRequestException('CPF de médico já cadastrado.');
 
         const existingCrm = await tx.doctor.findUnique({ where: { crm: data.doctorDetails.crm } });
@@ -234,7 +262,7 @@ export class AuthService {
           data: {
             userId: user.id,
             name: data.name,
-            cpf: data.doctorDetails.cpf,
+            cpf: normalizedCpf,
             crm: data.doctorDetails.crm,
           },
         });
@@ -260,16 +288,15 @@ export class AuthService {
         }
       }
 
-      await tx.auditLog.create({
-        data: {
-          userId: adminUserId,
-          action: 'CREATE',
-          resource: 'User',
-          resourceId: user.id,
-          details: JSON.stringify({ email: user.email, role: user.role }),
-          ipAddress: ipAddress || '127.0.0.1',
-        },
-      });
+      await this.audit.log(
+        adminUserId,
+        'CREATE',
+        'User',
+        user.id,
+        { email: user.email, role: user.role },
+        ipAddress ?? undefined,
+        tx
+      );
 
       return {
         id: user.id,

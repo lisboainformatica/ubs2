@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../shared/prisma.service';
 import { AuditService } from '../../shared/audit.service';
+import { normalizeCpf, validateCpf } from '../../shared/utils/cpf.util';
+
 
 @Injectable()
 export class PatientsService {
@@ -97,15 +99,7 @@ export class PatientsService {
         },
       });
 
-      await tx.auditLog.create({
-        data: {
-          userId,
-          action: 'UPDATE',
-          resource: 'Patient',
-          resourceId: patient.id,
-          details: JSON.stringify({ name: data.name, routingUbsId }),
-        },
-      });
+      await this.audit.log(userId, 'UPDATE', 'Patient', patient.id, { name: data.name, routingUbsId }, undefined, tx);
 
       return updatedPatient;
     });
@@ -148,8 +142,14 @@ export class PatientsService {
     },
     operatorUserId: string
   ) {
+    // Normalize and validate CPF
+    const normalizedCpf = normalizeCpf(data.cpf);
+    if (!validateCpf(normalizedCpf)) {
+      throw new BadRequestException('CPF inválido.');
+    }
+
     const existingPatient = await this.prisma.patient.findUnique({
-      where: { cpf: data.cpf },
+      where: { cpf: normalizedCpf },
     });
     if (existingPatient) {
       throw new BadRequestException('CPF já cadastrado.');
@@ -186,7 +186,7 @@ export class PatientsService {
       const patient = await tx.patient.create({
         data: {
           name: data.name,
-          cpf: data.cpf,
+          cpf: normalizedCpf,
           birthDate: new Date(data.birthDate),
           phone: data.phone,
           email: data.email,
@@ -195,15 +195,7 @@ export class PatientsService {
         },
       });
 
-      await tx.auditLog.create({
-        data: {
-          userId: operatorUserId,
-          action: 'CREATE',
-          resource: 'Patient',
-          resourceId: patient.id,
-          details: JSON.stringify({ name: patient.name, cpf: patient.cpf }),
-        },
-      });
+      await this.audit.log(operatorUserId, 'CREATE', 'Patient', patient.id, { name: patient.name, cpf: patient.cpf }, undefined, tx);
 
       return patient;
     });

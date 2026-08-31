@@ -297,7 +297,7 @@ export default function App() {
     try {
       const data = {
         email: regEmail,
-        passwordHash: regPassword,
+        password: regPassword,
         name: regName,
         cpf: regCpf,
         birthDate: regBirth,
@@ -777,7 +777,7 @@ export default function App() {
       const payload: any = {
         name: intName,
         email: intEmail,
-        passwordHash: intPassword,
+        password: intPassword,
         role: intRole,
       };
 

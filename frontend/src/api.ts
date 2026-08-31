@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 async function request(path: string, options: RequestInit = {}) {
   const token = localStorage.getItem('ubs_token');
@@ -27,10 +27,10 @@ async function request(path: string, options: RequestInit = {}) {
 
 export const api = {
   auth: {
-    login: (email: string, passwordHash: string) =>
+    login: (email: string, password: string) =>
       request('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, passwordHash }),
+        body: JSON.stringify({ email, password }),
       }),
     registerPatient: (data: any) =>
       request('/auth/register', {

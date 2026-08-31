@@ -8,7 +8,7 @@ import { RolesGuard } from './roles.guard';
   imports: [
     JwtModule.register({
       global: true,
-      secret: process.env.JWT_SECRET || 'ubs_super_secret_key_2026',
+      secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '24h' },
     }),
   ],
