@@ -1,9 +1,103 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-slate-950: var(--bg-slate-950);
+  --color-slate-900: var(--bg-slate-900);
+  --color-slate-850: var(--bg-slate-850);
+  --color-slate-800: var(--bg-slate-800);
+  --color-slate-750: var(--bg-slate-750);
+  --color-slate-700: var(--bg-slate-700);
+  --color-slate-500: var(--text-slate-500);
+  --color-slate-450: var(--text-slate-450);
+  --color-slate-400: var(--text-slate-400);
+  --color-slate-350: var(--text-slate-350);
+  --color-slate-300: var(--text-slate-300);
+  --color-slate-200: var(--text-slate-200);
+  --color-slate-100: var(--text-slate-100);
+  --color-white: var(--text-white);
+}
+
+:root {
+  /* LIGHT MODE */
+  --bg-slate-950: #f8fafc;
+  --bg-slate-900: #ffffff;
+  --bg-slate-850: #e2e8f0;
+  --bg-slate-800: #f1f5f9;
+  --bg-slate-750: #e2e8f0;
+  --bg-slate-700: #cbd5e1;
+  
+  --text-slate-500: #64748b;
+  --text-slate-450: #475569;
+  --text-slate-400: #64748b;
+  --text-slate-350: #334155;
+  --text-slate-300: #1e293b;
+  --text-slate-200: #0f172a;
+  --text-slate-100: #0f172a;
+  --text-white: #0f172a;
+}
+
+:root.dark {
+  /* DARK MODE */
+  --bg-slate-950: #020617;
+  --bg-slate-900: #0f172a;
+  --bg-slate-850: #1e293b;
+  --bg-slate-800: #334155;
+  --bg-slate-750: #1e293b;
+  --bg-slate-700: #475569;
+  
+  --text-slate-500: #64748b;
+  --text-slate-450: #94a3b8;
+  --text-slate-400: #94a3b8;
+  --text-slate-350: #cbd5e1;
+  --text-slate-300: #e2e8f0;
+  --text-slate-200: #f1f5f9;
+  --text-slate-100: #f8fafc;
+  --text-white: #ffffff;
+}
+
+/* Force elements with dark/colored backgrounds to preserve white text/light borders */
+.bg-indigo-500,
+.bg-indigo-550,
+.bg-indigo-600,
+.bg-indigo-650,
+.bg-indigo-900,
+.bg-indigo-950,
+.bg-purple-500,
+.bg-purple-600,
+.bg-pink-500,
+.bg-rose-500,
+.bg-rose-550,
+.bg-rose-600,
+.bg-emerald-500,
+.bg-emerald-550,
+.bg-emerald-600,
+.bg-amber-500,
+.bg-amber-600,
+.bg-gradient-to-r,
+.bg-gradient-to-br,
+.text-indigo-400,
+.text-indigo-300,
+.text-emerald-350,
+.text-emerald-300,
+.text-rose-350,
+.text-rose-300,
+.text-amber-350,
+.text-amber-300 {
+  --text-white: #ffffff !important;
+  --text-slate-100: #f8fafc !important;
+  --text-slate-200: #f1f5f9 !important;
+  --text-slate-300: #cbd5e1 !important;
+  --text-slate-350: #94a3b8 !important;
+  --text-slate-400: #64748b !important;
+}
+
 @layer base {
   body {
     @apply bg-slate-950 text-slate-100 antialiased selection:bg-indigo-500 selection:text-white;
     font-family: 'Inter', system-ui, sans-serif;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 }
 
@@ -14,7 +108,7 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--bg-slate-900);
 }
 
 ::-webkit-scrollbar-thumb {

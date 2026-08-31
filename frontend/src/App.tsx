@@ -19,11 +19,27 @@ import {
   BarChart3,
   Search,
   Check,
-  Building2
+  Building2,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { api } from './api';
 
 export default function App() {
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const saved = localStorage.getItem('ubs_theme');
+    return (saved as 'dark' | 'light') || 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('ubs_theme', theme);
+  }, [theme]);
+
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('ubs_token'));
   const [user, setUser] = useState<any>(() => {
     const savedUser = localStorage.getItem('ubs_user');
@@ -822,6 +838,18 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+      {/* Theme Toggle Button */}
+      <button
+        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        className="fixed top-4 right-4 z-[60] bg-slate-900/85 border border-slate-850 text-slate-350 p-2.5 rounded-xl hover:text-indigo-400 hover:border-indigo-455 transition shadow-lg backdrop-blur flex items-center justify-center cursor-pointer"
+        title="Alternar Tema Claro/Escuro"
+      >
+        {theme === 'dark' ? (
+          <Sun className="h-5 w-5 text-amber-400" />
+        ) : (
+          <Moon className="h-5 w-5 text-indigo-400" />
+        )}
+      </button>
       {/* Toast notifications */}
       {errorMsg && (
         <div className="fixed top-4 right-4 z-50 bg-rose-500/90 backdrop-blur text-white px-4 py-3 rounded-lg shadow-xl border border-rose-400 flex items-center gap-2 max-w-md animate-bounce">
@@ -846,9 +874,6 @@ export default function App() {
 
           {/* Hero Header */}
           <div className="text-center mb-8 max-w-lg">
-            <div className="inline-flex items-center gap-2 bg-indigo-500/10 text-indigo-400 px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider border border-indigo-500/20 mb-4">
-              <Activity className="h-4 w-4" /> Gestão Pública de Saúde
-            </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
               Sistema <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">UBS Integrado</span>
             </h1>
