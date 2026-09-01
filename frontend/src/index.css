@@ -99,6 +99,26 @@
     font-family: 'Inter', system-ui, sans-serif;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
+
+  button,
+  a,
+  select,
+  summary,
+  [role="button"],
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  input[type="checkbox"],
+  input[type="radio"] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }
 
 /* Custom premium scrollbar */
